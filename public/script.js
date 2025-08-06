@@ -1,5 +1,7 @@
-// Update API endpoints for local development
-const API_BASE_URL = '/api';
+// Dynamic API base URL based on environment
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+    ? '/api' 
+    : '/.netlify/functions';
 
 // DOM Elements
 const generateBtn = document.getElementById('generateBtn');
