@@ -57,14 +57,14 @@ app.post('/api/generate-email', async (req, res) => {
             messages: [
                 {
                     role: "system",
-                    content: "You are an expert email writer. Generate professional, engaging emails based on the user's prompt. The email should be well-structured with a clear subject line, greeting, body, and closing. Make it personalized and appropriate for the context."
+                    content: "You are an expert email writer. Generate professional, engaging emails based on the user's prompt. Return ONLY the email content without any email headers like 'Subject:', 'To:', 'From:', etc. The response should start with the subject line on the first line, followed by a blank line, then the email body content. Make it personalized and appropriate for the context."
                 },
                 {
                     role: "user",
-                    content: `Write an email based on this prompt: ${prompt}. The email should be sent to ${recipients.length} recipient(s).`
+                    content: `Write an email based on this prompt: ${prompt}. The email should be sent to ${recipients.length} recipient(s). Return only the email content starting with the subject on the first line, then a blank line, then the email body.`
                 }
             ],
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+            model: "meta-llama/llama-4-scout-17b-16e-instruct",
             temperature: 0.7,
             max_tokens: 1000,
         });
@@ -72,15 +72,63 @@ app.post('/api/generate-email', async (req, res) => {
         const generatedEmail = completion.choices[0]?.message?.content || "Unable to generate email";
 
         // Parse subject and body
-        const lines = generatedEmail.split('\n');
         let subject = "Generated Email";
         let body = generatedEmail;
 
-        // Extract subject if it starts with "Subject:"
-        if (lines[0].toLowerCase().startsWith('subject:')) {
-            subject = lines[0].replace(/^subject:\s*/i, '');
-            body = lines.slice(1).join('\n').trim();
+        // Split into lines for processing
+        const lines = generatedEmail.split('\n');
+        
+        // First, try to extract subject from explicit Subject: line
+        const subjectLine = lines.find(line => line.toLowerCase().startsWith('subject:'));
+        if (subjectLine) {
+            subject = subjectLine.replace(/^subject:\s*/i, '').trim();
+        } else {
+            // If no explicit subject line, use first non-empty line as subject
+            const firstContentLine = lines.find(line => line.trim() && !line.match(/^(To|From|CC|BCC|Date):\s*/i));
+            if (firstContentLine) {
+                subject = firstContentLine.trim();
+            }
         }
+
+        // Find where actual email content starts (after headers)
+        let contentStartIndex = 0;
+        let foundContent = false;
+        
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            
+            // Skip empty lines and header lines
+            if (line === '' || line.match(/^(Subject|To|From|CC|BCC|Date):\s*/i)) {
+                continue;
+            }
+            
+            // Skip lines that look like markdown headers
+            if (line.match(/^#{1,6}\s/) || line.match(/^\*\*.*\*\*$/)) {
+                continue;
+            }
+            
+            // This is where actual content starts
+            contentStartIndex = i;
+            foundContent = true;
+            break;
+        }
+
+        // Get clean body content
+        if (foundContent) {
+            body = lines.slice(contentStartIndex).join('\n').trim();
+        } else {
+            // Fallback: use everything after removing obvious headers
+            body = lines.filter(line => {
+                const trimmed = line.trim();
+                return trimmed && !trimmed.match(/^(Subject|To|From|CC|BCC|Date):\s*/i);
+            }).join('\n').trim();
+        }
+        
+        // Clean up the body
+        body = body
+            .replace(/^\s*\n+/gm, '') // Remove leading empty lines
+            .replace(/\n{3,}/g, '\n\n') // Limit consecutive empty lines to max 2
+            .trim();
 
         res.json({
             success: true,
@@ -90,6 +138,7 @@ app.post('/api/generate-email', async (req, res) => {
                 fullText: generatedEmail
             }
         });
+
     } catch (error) {
         console.error('Error generating email:', error);
         res.status(500).json({
