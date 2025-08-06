@@ -1,5 +1,5 @@
-// Update API endpoints for Netlify Functions
-const API_BASE_URL = '/.netlify/functions';
+// Update API endpoints for local development
+const API_BASE_URL = '/api';
 
 // DOM Elements
 const generateBtn = document.getElementById('generateBtn');
