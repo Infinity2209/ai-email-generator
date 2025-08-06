@@ -1,57 +1,51 @@
-// DOM elements
-const recipientsInput = document.getElementById('recipients');
-const promptInput = document.getElementById('prompt');
+// Update API endpoints for Netlify Functions
+const API_BASE_URL = '/.netlify/functions';
+
+// DOM Elements
 const generateBtn = document.getElementById('generateBtn');
-const loadingDiv = document.getElementById('loading');
-const emailSection = document.getElementById('emailSection');
-const subjectInput = document.getElementById('subject');
-const emailBodyInput = document.getElementById('emailBody');
 const sendBtn = document.getElementById('sendBtn');
 const regenerateBtn = document.getElementById('regenerateBtn');
-const resultDiv = document.getElementById('result');
+const loading = document.getElementById('loading');
+const emailSection = document.getElementById('emailSection');
+const result = document.getElementById('result');
 const successMessage = document.getElementById('successMessage');
 const errorMessage = document.getElementById('errorMessage');
 
-// Event listeners
+// Form Elements
+const recipientsInput = document.getElementById('recipients');
+const promptTextarea = document.getElementById('prompt');
+const subjectInput = document.getElementById('subject');
+const emailBodyTextarea = document.getElementById('emailBody');
+
+// Event Listeners
 generateBtn.addEventListener('click', generateEmail);
 sendBtn.addEventListener('click', sendEmail);
-regenerateBtn.addEventListener('click', generateEmail);
+regenerateBtn.addEventListener('click', regenerateEmail);
 
-// Generate email function
 async function generateEmail() {
     const recipients = recipientsInput.value.trim();
-    const prompt = promptInput.value.trim();
+    const prompt = promptTextarea.value.trim();
 
     if (!recipients || !prompt) {
-        showError('Please fill in all fields');
+        showError('Please fill in all required fields');
         return;
     }
 
-    // Validate email format
-    const emailList = recipients.split(',').map(email => email.trim());
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-    for (const email of emailList) {
-        if (!emailRegex.test(email)) {
-            showError(`Invalid email format: ${email}`);
-            return;
-        }
-    }
-
     // Show loading
-    loadingDiv.style.display = 'block';
+    loading.style.display = 'block';
     emailSection.style.display = 'none';
-    resultDiv.style.display = 'none';
+    result.style.display = 'none';
+    clearMessages();
 
     try {
-        const response = await fetch('/api/generate-email', {
+        const response = await fetch(`${API_BASE_URL}/generate-email`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                prompt: prompt,
-                recipients: emailList
+                prompt,
+                recipients: recipients.split(',').map(email => email.trim())
             })
         });
 
@@ -59,8 +53,9 @@ async function generateEmail() {
 
         if (data.success) {
             subjectInput.value = data.email.subject;
-            emailBodyInput.value = data.email.body;
+            emailBodyTextarea.value = data.email.body;
             emailSection.style.display = 'block';
+            showSuccess('Email generated successfully!');
         } else {
             showError(data.error || 'Failed to generate email');
         }
@@ -68,34 +63,34 @@ async function generateEmail() {
         console.error('Error:', error);
         showError('Failed to generate email. Please try again.');
     } finally {
-        loadingDiv.style.display = 'none';
+        loading.style.display = 'none';
     }
 }
 
-// Send email function
 async function sendEmail() {
-    const recipients = recipientsInput.value.trim().split(',').map(email => email.trim());
+    const recipients = recipientsInput.value.trim();
     const subject = subjectInput.value.trim();
-    const body = emailBodyInput.value.trim();
+    const body = emailBodyTextarea.value.trim();
 
-    if (!subject || !body) {
-        showError('Please fill in subject and body');
+    if (!recipients || !subject || !body) {
+        showError('Please fill in all required fields');
         return;
     }
 
     sendBtn.disabled = true;
     sendBtn.textContent = 'Sending...';
+    clearMessages();
 
     try {
-        const response = await fetch('/api/send-email', {
+        const response = await fetch(`${API_BASE_URL}/send-email`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                recipients: recipients,
-                subject: subject,
-                body: body
+                recipients: recipients.split(',').map(email => email.trim()),
+                subject,
+                body
             })
         });
 
@@ -103,12 +98,11 @@ async function sendEmail() {
 
         if (data.success) {
             showSuccess(`Email sent successfully to ${data.recipients} recipient(s)!`);
-            // Reset form
-            recipientsInput.value = '';
-            promptInput.value = '';
-            subjectInput.value = '';
-            emailBodyInput.value = '';
             emailSection.style.display = 'none';
+            // Clear form
+            promptTextarea.value = '';
+            subjectInput.value = '';
+            emailBodyTextarea.value = '';
         } else {
             showError(data.error || 'Failed to send email');
         }
@@ -121,32 +115,39 @@ async function sendEmail() {
     }
 }
 
-// Utility functions
+function regenerateEmail() {
+    emailSection.style.display = 'none';
+    clearMessages();
+}
+
 function showSuccess(message) {
     successMessage.textContent = message;
-    errorMessage.textContent = '';
-    resultDiv.style.display = 'block';
+    successMessage.style.display = 'block';
+    errorMessage.style.display = 'none';
+    result.style.display = 'block';
 }
 
 function showError(message) {
     errorMessage.textContent = message;
-    successMessage.textContent = '';
-    resultDiv.style.display = 'block';
+    errorMessage.style.display = 'block';
+    successMessage.style.display = 'none';
+    result.style.display = 'block';
 }
 
-// Clear messages when user starts typing
-recipientsInput.addEventListener('input', () => {
-    resultDiv.style.display = 'none';
-});
+function clearMessages() {
+    successMessage.style.display = 'none';
+    errorMessage.style.display = 'none';
+    result.style.display = 'none';
+}
 
-promptInput.addEventListener('input', () => {
-    resultDiv.style.display = 'none';
-});
-
-subjectInput.addEventListener('input', () => {
-    resultDiv.style.display = 'none';
-});
-
-emailBodyInput.addEventListener('input', () => {
-    resultDiv.style.display = 'none';
+// Health check on page load
+window.addEventListener('load', async () => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/health`);
+        if (!response.ok) {
+            console.warn('API health check failed');
+        }
+    } catch (error) {
+        console.warn('Could not connect to API:', error);
+    }
 });
