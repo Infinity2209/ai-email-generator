@@ -1,0 +1,10 @@
+{
+    "name": "netlify-functions",
+    "version": "1.0.0",
+    "description": "Netlify functions dependencies",
+    "main": "generate-email.js",
+    "dependencies": {
+        "groq-sdk": "^0.3.3",
+        "nodemailer": "^6.9.7"
+    }
+}
