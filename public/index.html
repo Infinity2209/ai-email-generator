@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI Email Generator</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI Email Generator</h1>
+            <p>Generate and send professional emails with AI assistance</p>
+        </header>
+
+        <main>
+            <section class="form-section">
+                <h2>Email Details</h2>
+                <label for="recipients">Recipients (comma-separated emails):</label>
+                <input type="text" id="recipients" placeholder="example@email.com, another@email.com" />
+
+                <label for="prompt">Email Prompt:</label>
+                <textarea id="prompt" rows="4" placeholder="Write a professional email about..."></textarea>
+
+                <button id="generateBtn" class="btn btn-primary">Generate Email</button>
+            </section>
+
+            <section id="loading" class="loading" style="display:none;">
+                <div class="spinner"></div>
+                <p>Generating your email with AI...</p>
+            </section>
+
+            <section id="emailSection" class="email-section" style="display:none;">
+                <h2>Generated Email</h2>
+                <label for="subject">Subject:</label>
+                <input type="text" id="subject" placeholder="Email subject" />
+
+                <label for="emailBody">Email Body:</label>
+                <textarea id="emailBody" rows="10" placeholder="Email content"></textarea>
+
+                <div class="button-group">
+                    <button id="sendBtn" class="btn btn-success">Send Email</button>
+                    <button id="regenerateBtn" class="btn btn-secondary">Regenerate</button>
+                </div>
+            </section>
+
+            <section id="result" class="result" style="display:none;">
+                <div id="successMessage" class="success-message"></div>
+                <div id="errorMessage" class="error-message"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
