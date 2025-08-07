@@ -2,34 +2,44 @@ const nodemailer = require('nodemailer');
 
 // Email transporter configuration
 let transporter;
-if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-    transporter = nodemailer.createTransport({
-        host: process.env.EMAIL_HOST,
-        port: process.env.EMAIL_PORT,
-        secure: false,
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-    });
-} else {
-    // For testing without email credentials, use ethereal email account
-    (async () => {
-        let testAccount = await nodemailer.createTestAccount();
-        transporter = nodemailer.createTransport({
-            host: 'smtp.ethereal.email',
-            port: 587,
-            secure: false,
-            auth: {
-                user: testAccount.user,
-                pass: testAccount.pass,
-            },
-        });
-        console.log('Ethereal test account created. User:', testAccount.user);
-    })();
-}
+const initializeTransporter = async () => {
+    try {
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            console.log('Using custom email configuration');
+            transporter = nodemailer.createTransport({
+                host: process.env.EMAIL_HOST,
+                port: parseInt(process.env.EMAIL_PORT, 10),
+                secure: false,
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS,
+                },
+            });
+        } else {
+            // For testing without email credentials, use ethereal email account
+            let testAccount = await nodemailer.createTestAccount();
+            transporter = nodemailer.createTransport({
+                host: 'smtp.ethereal.email',
+                port: 587,
+                secure: false,
+                auth: {
+                    user: testAccount.user,
+                    pass: testAccount.pass,
+                },
+            });
+            console.log('Ethereal test account created. User:', testAccount.user);
+        }
+    } catch (error) {
+        console.error('Error initializing transponder:', error);
+        throw error;
+    }
+};
+
+let transporterReady = false;
 
 exports.handler = async (event, context) => {
+    context.callbackWaitsForEmptyEventLoop = false;
+
     // Enable CORS
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -54,6 +64,11 @@ exports.handler = async (event, context) => {
     }
 
     try {
+        if (!transporterReady) {
+            await initializeTransporter();
+            transporterReady = true;
+        }
+
         const { recipients, subject, body } = JSON.parse(event.body);
 
         if (!recipients || recipients.length === 0) {
@@ -68,13 +83,15 @@ exports.handler = async (event, context) => {
         }
 
         const mailOptions = {
-            from: process.env.EMAIL_USER,
+            from: process.env.EMAIL_USER || 'no-reply@example.com',
             to: recipients.join(', '),
             subject: subject,
             text: body,
         };
 
-        const info = await transporter.sendMail(mailOptions);
+        console.log('Sending email to:', recipients.join(', '));
+        const info = await transponder.sendMail(mailOptions);
+        console.log('Email sent, messageId:', info.messageId);
 
         return {
             statusCode: 200,
@@ -89,12 +106,24 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Error sending email:', error);
+        let errorMessage = 'Failed to send email';
+        let statusCode = 500;
+
+        if (error.message.includes('Invalid login')) {
+            errorMessage = 'Invalid email credentials';
+            statusCode = 401;
+        } else if (error.message.includes('timeout')) {
+            errorMessage = 'Email sending timeout - please try again';
+            statusCode = 504;
+        }
+
         return {
-            statusCode: 500,
+            statusCode,
             headers,
             body: JSON.stringify({
                 success: false,
-                error: 'Failed to send email'
+                error: errorMessage,
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
             }),
         };
     }

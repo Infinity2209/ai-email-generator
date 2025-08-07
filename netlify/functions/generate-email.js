@@ -6,6 +6,9 @@ const groq = new Groq({
 });
 
 exports.handler = async (event, context) => {
+    // Set function timeout to 10 seconds (Netlify limit)
+    context.callbackWaitsForEmptyEventLoop = false;
+    
     // Enable CORS
     const headers = {
         'Access-Control-Allow-Origin': '*',
@@ -29,8 +32,31 @@ exports.handler = async (event, context) => {
         };
     }
 
+    // Start timer for timeout handling
+    const startTime = Date.now();
+    const MAX_EXECUTION_TIME = 9000; // 9 seconds to leave buffer
+
     try {
         const { prompt, recipients } = JSON.parse(event.body);
+
+        if (!prompt || !recipients || recipients.length === 0) {
+            return {
+                statusCode: 400,
+                headers,
+                body: JSON.stringify({ 
+                    success: false, 
+                    error: 'Missing required fields: prompt and recipients' 
+                }),
+            };
+        }
+
+        // Check execution time
+        if (Date.now() - startTime > MAX_EXECUTION_TIME) {
+            throw new Error('Function execution time limit exceeded');
+        }
+
+        console.log('Starting email generation with prompt:', prompt.substring(0, 100) + '...');
+        console.log('Recipients count:', recipients.length);
 
         const completion = await groq.chat.completions.create({
             messages: [
@@ -45,56 +71,44 @@ exports.handler = async (event, context) => {
             ],
             model: "meta-llama/llama-4-scout-17b-16e-instruct",
             temperature: 0.7,
-            max_tokens: 1000,
+            max_tokens: 800, // Reduced from 1000 to prevent timeout
         });
 
         const generatedEmail = completion.choices[0]?.message?.content || "Unable to generate email";
+        
+        console.log('Email generated successfully, length:', generatedEmail.length);
 
-        // Parse subject and body (same logic as server.js)
+        // Parse subject and body
         let subject = "Generated Email";
         let body = generatedEmail;
 
         const lines = generatedEmail.split('\n');
         
-        const subjectLine = lines.find(line => line.toLowerCase().startsWith('subject:'));
-        if (subjectLine) {
-            subject = subjectLine.replace(/^subject:\s*/i, '').trim();
-        } else {
-            const firstContentLine = lines.find(line => line.trim() && !line.match(/^(To|From|CC|BCC|Date):\s*/i));
-            if (firstContentLine) {
-                subject = firstContentLine.trim();
+        // Extract subject from first line
+        if (lines[0] && lines[0].trim()) {
+            subject = lines[0].trim();
+            // Remove "Subject:" prefix if present
+            subject = subject.replace(/^subject:\s*/i, '');
+        }
+
+        // Find body content (skip empty lines and headers)
+        let bodyStartIndex = 1;
+        for (let i = 1; i < lines.length; i++) {
+            if (lines[i].trim() !== '') {
+                bodyStartIndex = i;
+                break;
             }
         }
 
-        let contentStartIndex = 0;
-        let foundContent = false;
+        body = lines.slice(bodyStartIndex).join('\n').trim();
         
-        for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (line === '' || line.match(/^(Subject|To|From|CC|BCC|Date):\s*/i)) {
-                continue;
-            }
-            if (line.match(/^#{1,6}\s/) || line.match(/^\*\*.*\*\*$/)) {
-                continue;
-            }
-            contentStartIndex = i;
-            foundContent = true;
-            break;
-        }
-
-        if (foundContent) {
-            body = lines.slice(contentStartIndex).join('\n').trim();
-        } else {
-            body = lines.filter(line => {
-                const trimmed = line.trim();
-                return trimmed && !trimmed.match(/^(Subject|To|From|CC|BCC|Date):\s*/i);
-            }).join('\n').trim();
-        }
-
+        // Clean up body formatting
         body = body
             .replace(/^\s*\n+/gm, '')
             .replace(/\n{3,}/g, '\n\n')
             .trim();
+
+        console.log('Email parsed successfully, subject:', subject);
 
         return {
             statusCode: 200,
@@ -110,13 +124,31 @@ exports.handler = async (event, context) => {
         };
 
     } catch (error) {
-        console.error('Error generating email:', error);
+        console.error('Error in generate-email function:', error.message);
+        console.error('Stack trace:', error.stack);
+        
+        // Handle specific error types
+        let errorMessage = 'Failed to generate email';
+        let statusCode = 500;
+        
+        if (error.message.includes('API key')) {
+            errorMessage = 'Invalid or missing GROQ API key';
+            statusCode = 401;
+        } else if (error.message.includes('timeout')) {
+            errorMessage = 'Request timeout - please try again';
+            statusCode = 504;
+        } else if (error.message.includes('rate limit')) {
+            errorMessage = 'Rate limit exceeded - please try again later';
+            statusCode = 429;
+        }
+
         return {
-            statusCode: 500,
+            statusCode,
             headers,
             body: JSON.stringify({
                 success: false,
-                error: 'Failed to generate email'
+                error: errorMessage,
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
             }),
         };
     }
