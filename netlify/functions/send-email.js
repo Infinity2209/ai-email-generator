@@ -30,7 +30,7 @@ const initializeTransporter = async () => {
             console.log('Ethereal test account created. User:', testAccount.user);
         }
     } catch (error) {
-        console.error('Error initializing transponder:', error);
+        console.error('Error initializing transporter:', error);
         throw error;
     }
 };
@@ -90,7 +90,7 @@ exports.handler = async (event, context) => {
         };
 
         console.log('Sending email to:', recipients.join(', '));
-        const info = await transponder.sendMail(mailOptions);
+        const info = await transporter.sendMail(mailOptions);
         console.log('Email sent, messageId:', info.messageId);
 
         return {

@@ -1,9 +1,17 @@
 const { Groq } = require('groq-sdk');
 
 // Initialize Groq client
-const groq = new Groq({
-    apiKey: process.env.GROQ_API_KEY,
-});
+let groq;
+try {
+    if (!process.env.GROQ_API_KEY) {
+        throw new Error('GROQ_API_KEY environment variable is missing');
+    }
+    groq = new Groq({
+        apiKey: process.env.GROQ_API_KEY,
+    });
+} catch (error) {
+    console.error('Failed to initialize Groq client:', error.message);
+}
 
 exports.handler = async (event, context) => {
     // Set function timeout to 10 seconds (Netlify limit)
