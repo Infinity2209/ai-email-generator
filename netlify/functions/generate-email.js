@@ -65,6 +65,8 @@ exports.handler = async (event, context) => {
 
         console.log('Starting email generation with prompt:', prompt.substring(0, 100) + '...');
         console.log('Recipients count:', recipients.length);
+        console.log('GROQ_API_KEY exists:', !!process.env.GROQ_API_KEY);
+        console.log('GROQ_API_KEY length:', process.env.GROQ_API_KEY ? process.env.GROQ_API_KEY.length : 0);
 
         const completion = await groq.chat.completions.create({
             messages: [
